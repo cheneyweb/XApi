@@ -1,0 +1,12 @@
+{
+    "srcPath": "/Users/cheney/Documents/gitlab/alpha-api/src/main/java",
+    "httpHead": "http://localhost:8070/alpha",
+	"serverRoot":"/",
+	"proxyRoot":"/alpha",
+	"proxyHost":"http://localhost:8888",
+
+    "defaultRootRequestMethod": "POST",
+    "jsonFile": "static/restful.json",
+    "port": 8070,
+    "staticPath": "static"
+}

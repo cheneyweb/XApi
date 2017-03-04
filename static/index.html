@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel='stylesheet' href='bootstrap/css/bootstrap.min.css' />
+    <title>XApi-自动REST文档服务</title>
+</head>
+
+<body>
+    <div id="xapi">
+        <nav class="navbar navbar-toggleable-md navbar-light bg-faded">
+            <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <a class="navbar-brand" href="#">XApi</a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav mr-auto">
+                    <li class="nav-item active">
+                        <a class="nav-link" href="#">power by 许宇帅</a>
+                    </li>
+                    <li class="nav-item">
+                        <button class="btn btn-outline-success" type="submit" @click="saveAll">全部保存</button>
+                        <button class="btn btn-outline-success" type="submit" @click="reloadApi">重新扫描</button>
+                        <button class="btn btn-outline-success" type="submit" @click="setCodeSrc" data-toggle="tooltip" data-placement="right" title="暂不支持">
+                            设定代码路径</button>
+                        <a href="http://localhost:8070/alpha/api/test/ping">test</a>
+                        <code>GET路径参数目前支持单参数例如“id=1”,非路径参数例如“id=1&name=foo”,POST参数为json字符串</code>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <table class="table table-sm table-hover thead-inverse">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>接口名称</th>
+                    <th>请求url</th>
+                    <th>请求方式</th>
+                    <th>请求内容</th>
+                    <th>返回状态</th>
+                    <th>返回数据</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="itemTr" v-for="item,index in apis" :class="item.isRoot ? 'table-success' : ''">
+                    <td @click="showItemDetail(item,$event)">{{index}}</td>
+                    <td>
+                        <input class="form-control" v-model="item.name" :value="item.name"></input>
+                    </td>
+                    <td @click="showItemDetail(item,$event)">{{item.req}}</td>
+                    <td @click="showItemDetail(item,$event)" :class="item.method=='POST'?'text-warning':''">{{item.method}}</td>
+                    <td>
+                        <textarea class="form-control" rows="1" v-model="item.body"></textarea>
+                    </td>
+                    <td @click="showItemDetail(item,$event)" :class="item.respCode!=200?'text-danger':''">{{item.respCode}}</td>
+                    <td>
+                        <button type="button" class="btn btn-secondary" @click="sendReq(item)">请求</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <textarea rows="10" style="visibility:hidden;"></textarea>
+        <div class="fixed-bottom row">
+            <div class="form-group col-6">
+                <textarea readonly="true" class="form-control" id="taReq" rows="10"></textarea>
+            </div>
+            <div class="form-group col-6">
+                <textarea readonly="true" class="form-control" id="taRes" rows="10"></textarea>
+            </div>
+        </div>
+        <!-- 返回详情弹出Model -->
+        <div class="modal fade" id="respModalLong" tabindex="-1" role="dialog" aria-labelledby="detailModalLongTitle" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="detailModalLongTitle">返回数据</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <textarea id="respTextArea" class="form-control" rows="10"></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" @click="saveRespData">保存返回数据</button>
+                        <button type="button" class="btn btn-danger" data-dismiss="modal">关闭</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+<script src="bootstrap/js/jquery.min.js"></script>
+<script src="bootstrap/js/tether.min.js"></script>
+<script src="bootstrap/js/bootstrap.min.js"></script>
+<script src="vue/vue.min.js"></script>
+<script src="vue/vue-resource.min.js"></script>
+<script type="text/javascript">
+$(function() {
+    // Vue.http.options.emulateJSON = true;
+    var tempItemObj;
+    new Vue({
+        el: '#xapi',
+        data: {
+            apijsonurl: 'restful.json',
+            savejosnurl: '/xapi/save',
+            reloadurl: '/xapi/reload',
+            setsrcpathurl: '/xapi/setsrcpathurl',
+            proxyurl: '/xapi/proxy',
+            apis: [{
+                req: '',
+                name: '',
+                method: '',
+                body: '',
+                isRoot: false,
+                respCode: '',
+                respData: ''
+            }]
+        },
+        created() {
+            this.load()
+        },
+        methods: {
+            // 加载json数据，显示
+            load: function() {
+                var vm = this
+                vm.$http.get(vm.apijsonurl)
+                    .then((sucResp) => {
+                        vm.apis = sucResp.data;
+                    }, (errResp) => {
+                        alert('请求JSON数据失败');
+                    });
+            },
+            // 保存所有数据到服务器
+            saveAll: function() {
+                var vm = this;
+                vm.$http.post(vm.savejosnurl, vm.apis)
+                    .then((sucResp) => {
+                        if (sucResp.data == 'Y') {
+                            window.location.href = window.location.href;
+                            //alert('全部请求数据已经保存到服务器');
+                        }
+                    }, (errResp) => {
+                        alert('保存请求数据到服务器失败');
+                    });
+            },
+            // 保存返回数据到服务器
+            saveRespData: function() {
+                var vm = this;
+                var respData = $('#respTextArea').val();
+                vm.apis.forEach(function(item) {
+                    if (item == tempItemObj) {
+                        item.respData = respData;
+                        return false;
+                    }
+                });
+                vm.saveAll();
+                $('#respModalLong').modal('hide');
+            },
+            // 弹窗显示请求内容
+            showReq: function(reqItem) {
+                $('#reqModalBody').html(reqItem.body);
+                $('#reqModalLong').modal('show');
+            },
+            // 弹窗显示返回数据
+            showResp: function(reqItem) {
+                tempItemObj = reqItem;
+                $('#respTextArea').val(reqItem.respData);
+                $('#respModalLong').modal('show');
+            },
+            // 下方控制台显示详情
+            showItemDetail: function(reqItem, event) {
+                $('#taReq').val(reqItem.body);
+                $('#taRes').val(reqItem.respData);
+                $('.itemTr').removeClass('bg-success');
+                if (event != null) {
+                    $(event.target).parent().addClass('bg-success');
+                }
+            },
+            // 设定代码路径
+            setCodeSrc: function() {
+                // alert('设定代码路径成功');
+            },
+            // 发送请求测试
+            sendReq: function(reqItem) {
+                var vm = this;
+                vm.proxyurl = reqItem.req;
+                // 判断是否包含路径参数(目前仅支持单路径参数)
+                if (vm.proxyurl.indexOf('{') != -1) {
+                    let pathParam = reqItem.body.trim().split('=')[1];
+                    let pathParamRegex = /{.*}/;
+                    let regexRes = vm.proxyurl.replace(pathParamRegex, pathParam);
+                    vm.proxyurl = regexRes;
+                } else {
+                    vm.proxyurl += '?' + reqItem.body;
+                }
+                if (reqItem.method == 'GET') {
+                    vm.$http.get(vm.proxyurl)
+                        .then(sucResp => {
+                            reqItem.respCode = sucResp.status;
+                            reqItem.respData = sucResp.body;
+                            vm.showItemDetail(reqItem, null);
+                        }, errResp => {
+                            if (errResp.status == 0) {
+                                alert('请求无法发出，可能是超时或跨域问题');
+                            } else {
+                                reqItem.respCode = errResp.status;
+                                reqItem.respData = errResp.body;
+                                vm.showItemDetail(reqItem, null);
+                            }
+                        });
+                } else if (reqItem.method == 'POST') {
+                    vm.$http.post(vm.proxyurl, reqItem.body)
+                        .then(sucResp => {
+                            reqItem.respCode = sucResp.status;
+                            reqItem.respData = sucResp.body;
+                            vm.showItemDetail(reqItem, null);
+                        }, errResp => {
+                            if (errResp.status == 0) {
+                                alert('请求无法发出，可能是超时或跨域问题');
+                            } else {
+                                reqItem.respCode = errResp.status;
+                                reqItem.respData = errResp.body;
+                                vm.showItemDetail(reqItem, null);
+                            }
+                        });
+                }
+            },
+            // 重新扫描加载代码
+            reloadApi: function() {
+                var vm = this;
+                this.$http.get(vm.reloadurl).then((sucResp) => {
+                    window.location.href = window.location.href;
+                    // alert('已经重新扫描代码生成接口');
+                }, (errResp) => {
+                    alert('重新扫描代码失败,可能由网络问题引起');
+                });
+            }
+        }
+    });
+    $('[data-toggle="tooltip"]').tooltip();
+});
+</script>
+
+</html>
